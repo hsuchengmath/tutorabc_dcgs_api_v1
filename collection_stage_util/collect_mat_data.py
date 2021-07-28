@@ -1,7 +1,7 @@
 
+from tqdm import tqdm
 
-
-
+ 
 def SQL_query(query=None, database=None):
     import pymssql
     import pandas as pd
@@ -34,7 +34,7 @@ def SQL_query(query=None, database=None):
 import pandas as pd
 import random
 
-
+ 
  
 
 class Collect_Material_From_DimMaterialPool:
@@ -56,7 +56,27 @@ class Collect_Material_From_DimMaterialPool:
         dat = SQL_query(query=sql,database='BI_EDW')
         return dat
 
-    def main(self, matType='Adult'):
-        mat_data = self.load_organic_mat_data(matType=matType)
-        new_mat_list = random.sample(list(set(mat_data['MaterialID']) - set(self.old_mat_list)), int(self.alpha * self.old_mat_len))
+    def calculate_weight_for_new_mat(self, new_mat_list, user2history_mat):
+        user_list = list(user2history_mat.keys())
+        weight_of_new_mat_list = list()
+        for i in range(len(new_mat_list)):
+            weight = 0    
+            for uid in user_list:
+                if mat in set(user2history_mat[uid]):
+                    weight +=1
+            weight_of_new_mat_list.append(weight)
+        return weight_of_new_mat_list
+
+    def main(self,user2history_mat=None, Adult_or_Junior='Adult'):
+        matType = Adult_or_Junior
+        mat_dat = self.load_organic_mat_data(matType=matType)
+        new_mat_list = list(set(mat_dat['MaterialID']) - set(self.old_mat_list))
+        new_mat_sampled_num = int(self.alpha * self.old_mat_len)
+        sampled_mat_list = list()
+        for _ in tqdm(range(new_mat_sampled_num)):
+            weight_of_new_mat_list = self.calculate_weight_for_new_mat(new_mat_list, user2history_mat)
+            sampled_mat = random.choices(new_mat_list, weights=weight_of_new_mat_list, k=1)[0]
+            new_mat_list = list(set(new_mat_list) - {sampled_mat})
+            sampled_mat_list.append(sampled_mat)
         return self.old_mat_list + new_mat_list
+ 

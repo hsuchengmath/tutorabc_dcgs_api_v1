@@ -43,7 +43,7 @@ def collect_rating_data_func(batch_size=1000 ,exp_date=['2021-05-01','2021-06-01
                     and client_sn is not NULL and MaterialID is not NULL and PurchaseBrandID is not NULL and session_sn is not NULL
                     and PurchaseBrandID in (1,3,33)
                     and client_sn in ({})
-                    and account_type = '正常使用客戶'
+                    and account_type = N'正常使用客戶'
                     and HCatgId = 'EN'
                 order by
                     attend_date
