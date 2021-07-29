@@ -4,17 +4,29 @@
 
 
 
+
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import torch
+import random
+import math
+
+
+
+from modeling_stage_util.util_for_ngcf_model import Cold_Start_Prediction
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F 
 import torch.optim as optim
 from tqdm import tqdm
-import pandas as pd
-import numpy as np
 
- 
+
+
+
 class NGCF(nn.Module):
-    def __init__(self, n_user, n_item, norm_adj,mat_individual_col):
+    def __init__(self, n_user, n_item, norm_adj):
         super(NGCF, self).__init__()
         self.n_user = n_user
         self.n_item = n_item
@@ -26,9 +38,10 @@ class NGCF(nn.Module):
         self.layers = [self.emb_size for _ in range(head_num)]
         self.decay = eval('[1e-5]')[0]
         self.embedding_dict, self.weight_dict = self.init_weight()
-        self.sparse_norm_adj = self._convert_sp_mat_to_sp_tensor(self.norm_adj)#.cuda()
-        self.inter_layer = nn.Linear(len(mat_individual_col), len(mat_individual_col))#.cuda()
-        self.predict_layer = nn.Linear((self.emb_size*4)+len(mat_individual_col), 1)#.cuda()
+        self.sparse_norm_adj = self._convert_sp_mat_to_sp_tensor(self.norm_adj).cuda()
+        self.predict_layer = nn.Linear((self.emb_size*4), 1).cuda()
+        self.ME_layer = nn.Linear(n_item, (self.emb_size*4)).cuda()
+
 
     def init_weight(self):
         # xavier init
@@ -74,7 +87,7 @@ class NGCF(nn.Module):
     def rating(self, u_g_embeddings, pos_i_g_embeddings):
         return torch.matmul(u_g_embeddings, pos_i_g_embeddings.t())
 
-    def forward(self, users, items, inter, drop_flag=True):
+    def forward(self, users, items, drop_flag=True):
         A_hat = self.sparse_dropout(self.sparse_norm_adj,
                                     self.node_dropout,
                                     self.sparse_norm_adj._nnz()) if drop_flag else self.sparse_norm_adj
@@ -107,153 +120,109 @@ class NGCF(nn.Module):
         i_g_embeddings = i_g_embeddings[items, :]
         # interaction
         pair_emb = u_g_embeddings * i_g_embeddings
-        inter = self.inter_layer(inter)
-        pair_emb = torch.cat((pair_emb, inter), -1)
         prediction = self.predict_layer(pair_emb)
         return torch.sigmoid(prediction.view(-1))
 
 class NGCF_Modeling:
-    def __init__(self, n_user, n_item, norm_adj,mat_individual_col, load_model=[False,None]):
+    def __init__(self, n_user, n_item, norm_adj):
         lr = 0.001
         self.epochs = 20
         self.batch_size = 1024
         # model
-        if load_model[0] is False:
-            self.model = NGCF(n_user, n_item, norm_adj,mat_individual_col)#.cuda()
-            # build loss func and opt
-            self.loss_function = nn.BCEWithLogitsLoss() 
-            self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        else:
-            self.model = NGCF(n_user, n_item, norm_adj,mat_individual_col)#.cuda()
-            self.model.load_state_dict(torch.load(load_model[1]))
-            self.model.eval()
+        self.model = NGCF(n_user, n_item, norm_adj).cuda()
+        # build loss func and opt
+        self.loss_function = nn.BCEWithLogitsLoss() 
+        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
     
-    def train(self, train_user, train_item, train_label,train_interaction, save_model=False):
+    def train(self, train_user, train_item, train_label):
         print('Start to train NCF model!!')
-        train_interaction = torch.tensor(train_interaction)#.cuda()
         batch_num = int(len(train_label) / self.batch_size) + 1
         for epoch in tqdm(range(self.epochs)):
             self.model.train()
             for i in range(batch_num):
                 user = train_user[i*self.batch_size : (i+1)*self.batch_size]
                 item = train_item[i*self.batch_size : (i+1)*self.batch_size]
-                label = torch.tensor(train_label[i*self.batch_size : (i+1)*self.batch_size]).float()#.cuda()
-                interaction = train_interaction[i*self.batch_size : (i+1)*self.batch_size]
+                label = torch.tensor(train_label[i*self.batch_size : (i+1)*self.batch_size]).float().cuda()
                 self.model.zero_grad()
-                prediction = self.model(user, item,interaction)  # shape=(256,) | Real number
+                prediction = self.model(user, item)  # shape=(256,) | Real number
                 loss = self.loss_function(prediction, label)
                 loss.backward()
                 self.optimizer.step()
-        if save_model[0] is True:
-            torch.save(self.model.state_dict(), save_model[1])
         print('Finish training model!!')  
 
-
-    def recommend(self, test_data, uid2index ,mat2index, rf_model, feature_list):
-        test_data = test_data[feature_list + ['client_sn','MaterialID']].dropna()
-        old_uid, old_mat = list(uid2index.keys()), list(mat2index.keys())
-        new_uid = list(set(test_data['client_sn']) - set(old_uid))
-        new_mat = list(set(test_data['MaterialID']) - set(old_mat))
-        old_dat = test_data[(test_data['client_sn'].isin(old_uid)) & (test_data['MaterialID'].isin(old_mat))]
-        new_dat = test_data[(test_data['client_sn'].isin(new_uid)) | (test_data['MaterialID'].isin(new_mat))]
-        new_dat = new_dat.dropna()
-        # non-cold_start
-        old_dat = old_dat.dropna()
-        old_uid = list(old_dat['client_sn'])
-        old_mat = list(old_dat['MaterialID'])
-        old_uid_model = [uid2index[u] for u in old_uid]
-        old_mat_model = [mat2index[m] for m in old_mat]
-        interaction = old_dat[feature_list].values.tolist()
-        non_cold_start_inter = torch.tensor(interaction)#.cuda()
-        non_cold_start_pred = list(self.model(old_uid_model, old_mat_model,non_cold_start_inter).cpu().detach().numpy())
-        # cold_start
-        new_uid = list(new_dat['client_sn'])
-        new_mat = list(new_dat['MaterialID'])    
-        predictions_list = list(rf_model.predict(new_dat[feature_list]))
-        # build U2M2P UMP_dat
-        U2M2P, client_sn_list, MaterialID_list, prob_list, cold_start_or_not = dict(), list(), list(), list(),list()
-        for i in range(len(old_uid)):
-            if old_uid[i] not in U2M2P:
-                U2M2P[old_uid[i]] = dict()
-            if old_mat[i] not in U2M2P[old_uid[i]]:
-                U2M2P[old_uid[i]][old_mat[i]] = non_cold_start_pred[i]
-                client_sn_list.append(old_uid[i])
-                MaterialID_list.append(old_mat[i])
-                prob_list.append(non_cold_start_pred[i])
-        for i in range(len(new_uid)):
-            if new_uid[i] not in U2M2P:
-                U2M2P[new_uid[i]] = dict()
-            if new_mat[i] not in U2M2P[new_uid[i]]:
-                U2M2P[new_uid[i]][new_mat[i]] = predictions_list[i]  
-                client_sn_list.append(new_uid[i])
-                MaterialID_list.append(new_mat[i])
-                prob_list.append(predictions_list[i])
-        UMP_dat = {'client_sn':client_sn_list,'MaterialID':MaterialID_list,'prob':prob_list}
-        UMP_dat = pd.DataFrame(UMP_dat)
-        return U2M2P, UMP_dat
-
-
-
-
-
-import numpy as np
-import scipy.sparse as sp
-
-
-
-
-class Adj_Matx_Generator:
-    def __init__(self, user_num, item_num, user_item_inter):
-        self.user_num = user_num
-        self.item_num = item_num
-        self.user_id_list = user_item_inter[0]
-        self.item_id_list = user_item_inter[1]
-
-    def build_u_v_matrix(self):
-        self.R = sp.dok_matrix((self.user_num, self.item_num), dtype=np.float32)
-        for i in range(len(self.user_id_list)):
-            uid, iid = self.user_id_list[i], self.item_id_list[i]
-            self.R[uid, iid] = 1
-    
-    def build_uv_uv_matrix(self):
-        self.adj_mat = sp.dok_matrix((self.user_num + self.item_num, self.user_num + self.item_num), dtype=np.float32)
-        self.adj_mat = self.adj_mat.tolil()
-        R = self.R.tolil()
-        self.adj_mat[:self.user_num, self.user_num:] = R
-        self.adj_mat[self.user_num:, :self.user_num] = R.T
-        self.adj_mat = self.adj_mat.todok()
-
-    def mean_adj_single(self,adj):
-        # D^-1 * A
-        rowsum = np.array(adj.sum(1))
-        d_inv = np.power(rowsum, -1).flatten()
-        d_inv[np.isinf(d_inv)] = 0.
-        d_mat_inv = sp.diags(d_inv)
-        norm_adj = d_mat_inv.dot(adj)
-        # norm_adj = adj.dot(d_mat_inv)
-        return norm_adj.tocoo()
-
-    def normalized_adj_single(self, adj):
-        # D^-1/2 * A * D^-1/2 (normalized Laplacian)
-        rowsum = np.array(adj.sum(1))
-        d_inv_sqrt = np.power(rowsum, -0.5).flatten()
-        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-        d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-        # bi_lap = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt)
-        bi_lap = d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt)
-        return bi_lap.tocoo()
-
-    def check_adj_if_equal(self, adj):
-        dense_A = np.array(adj.todense())
-        degree = np.sum(dense_A, axis=1, keepdims=False)
-        temp = np.dot(np.diag(np.power(degree, -1)), dense_A)
-        return temp
-
-    def main(self):
-        self.build_u_v_matrix()
-        self.build_uv_uv_matrix()
-        norm_adj_mat = self.mean_adj_single(self.adj_mat + sp.eye(self.adj_mat.shape[0]))
-        mean_adj_mat = self.mean_adj_single(self.adj_mat)
-        normal_adj_mat = self.normalized_adj_single(self.adj_mat + sp.eye(self.adj_mat.shape[0]))
-        return self.adj_mat.tocsr(), norm_adj_mat.tocsr(), normal_adj_mat.tocsr()
+      
+    def recommend(self, user, item, uid2index ,mat2index, rf_model, test_data, mode):
+        '''
+        status_tag:
+        0: old_u, old_m
+        1: old_u, new_m
+        2: new_u, old_m
+        3: new_u, new_m
+        '''
+        # build cold start object
+        csp_obj = Cold_Start_Prediction(test_data, uid2index, mat2index, mode)
+        #
+        non_cold_start_user, non_cold_start_item, non_cold_start_index = list(), list(), list()
+        cold_start_user, cold_start_item, cold_start_index = list(), list(), list()
+        status_tag_list = list()
+        for i in range(len(user)):
+            if user[i] in uid2index and item[i] in mat2index:
+                non_cold_start_user.append(uid2index[user[i]])
+                non_cold_start_item.append(mat2index[item[i]])
+                non_cold_start_index.append(i)
+                status_tag_list.append(0)
+            elif user[i] in uid2index and item[i] not in mat2index:
+                matched_mid = csp_obj.main(new_uid=None, new_mid=item[i], mode='cold_start_item',test_mode = 'normal')
+                non_cold_start_user.append(uid2index[user[i]])
+                non_cold_start_item.append(mat2index[matched_mid])
+                non_cold_start_index.append(i)
+                status_tag_list.append(1)
+            elif user[i] not in uid2index and item[i] in mat2index:
+                matched_uid = csp_obj.main(new_uid=user[i], new_mid=None, mode='cold_start_user',test_mode = 'normal')
+                #non_cold_start_user.append(uid2index[matched_uid])
+                #non_cold_start_item.append(mat2index[item[i]])
+                #non_cold_start_index.append(i)  
+                cold_start_user.append(user[i])
+                cold_start_item.append(item[i])
+                cold_start_index.append(i)
+                status_tag_list.append(2)
+            else:
+                matched_uid, matched_mid = csp_obj.main(new_uid=user[i], new_mid=item[i], mode='cold_start_user_item',test_mode = 'normal')
+                #non_cold_start_user.append(uid2index[matched_uid])
+                #non_cold_start_item.append(mat2index[matched_mid])
+                #non_cold_start_index.append(i)  
+                cold_start_user.append(user[i])
+                cold_start_item.append(matched_mid)
+                cold_start_index.append(i)
+                status_tag_list.append(3)
+        # non_cold_start part 
+        non_cold_start_pred = list(self.model(non_cold_start_user, non_cold_start_item).cpu().detach().numpy())
+        # cold_start part
+        cold_start_pred = list()
+        for i in range(len(cold_start_user)):
+            dat = test_data[(test_data['client_sn']==cold_start_user[i]) & (test_data['MaterialID']==cold_start_item[i])]
+            dat = np.array(dat)
+            if dat.shape[0] != 0:
+                predictions = rf_model.predict(dat)
+            else:
+                predictions = [0]
+            predictions = predictions[0]   
+            cold_start_pred.append(predictions)
+        # intergrate
+        predictions_list = list()
+        for i in range(len(non_cold_start_pred)):
+            predictions_list.append([non_cold_start_pred[i], non_cold_start_index[i]])
+        for i in range(len(cold_start_pred)):
+            predictions_list.append([cold_start_pred[i], cold_start_index[i]])
+        predictions_list = sorted(predictions_list, key=lambda x:x[1])
+        predictions_list = [element[0] for element in predictions_list]
+        # build R matx
+        U2M2P = dict()
+        user, item
+        for i in range(len(user)):
+            u, m = user[i], item[i]
+            if u not in U2M2P:
+                U2M2P[u] = dict()
+            U2M2P[u][m] = predictions_list[i]
+        return U2M2P

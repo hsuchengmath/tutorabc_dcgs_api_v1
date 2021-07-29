@@ -64,6 +64,8 @@ class Modeling_Stage:
         mat_overall_dat_Jr = data_process_obj.mat_overall_dat_Jr
         mat_individual_dat_AD = data_process_obj.mat_individual_dat_AD
         mat_overall_dat_AD = data_process_obj.mat_overall_dat_AD
+        train_data_AD_wo_na = data_process_obj.train_data_AD_wo_na
+        train_data_Jr_wo_na = data_process_obj.train_data_Jr_wo_na
         train_data_AD = data_process_obj.train_data_AD
         train_data_Jr = data_process_obj.train_data_Jr
         label_AD = data_process_obj.label_AD
@@ -72,15 +74,15 @@ class Modeling_Stage:
         #
         rf_train_data_package_AD = \
             {
-             'train_data' : train_data_AD[feature_list],
+             'train_data' : train_data_AD_wo_na,
              'label' : label_AD, 
              'mat_overall_dat' : mat_overall_dat_AD,
-             'mat_individual_dat' ; mat_individual_dat_AD,
+             'mat_individual_dat' : mat_individual_dat_AD,
              'feature_list' : feature_list,
             }
         rf_train_data_package_Jr = \
             {
-             'train_data' : train_data_Jr[feature_list],
+             'train_data' : train_data_Jr_wo_na,
              'label' : label_Jr,
              'mat_overall_dat' : mat_overall_dat_Jr,
              'mat_individual_dat' ; mat_individual_dat_Jr,
@@ -104,7 +106,7 @@ class Modeling_Stage:
             pickle.dump(model_rf, open(self.save_path + 'rf_'+mode+'_model.pickle', 'wb'))
 
     def re_index_func(self, train_data):
-        # data process of NCF model 
+        # data process of NGCF model 
         client_sn_train = list(train_data['client_sn'])
         mat_train = list(train_data['MaterialID'])
         client_sn = list(set(client_sn_train))

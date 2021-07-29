@@ -9,6 +9,13 @@ import random
 import matplotlib.pyplot as plt  
 import numpy as np
 from sklearn import metrics
+from tqdm import tqdm
+
+
+
+
+
+
 
 
 def transform_date_to_age(date_str, categorical=True):
