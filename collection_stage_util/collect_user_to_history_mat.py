@@ -1,7 +1,7 @@
 
 from collection_stage_util.write_organic_data_to_db import Organic_Data_TO_DB
 
-
+ 
  
 def SQL_query(query=None, database=None):
     import pymssql
@@ -35,7 +35,7 @@ def SQL_query(query=None, database=None):
 
 
 
-class Collect_User_With_History_Mat:
+class Collect_User_TO_History_Mat:
     def __init__(self, obj):
         self.organic_data_to_db_obj = obj
         self.organic_data_to_db_obj.define_collection(collection_name='SKY_RULE')

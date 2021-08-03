@@ -2,7 +2,7 @@
 import random
 import numpy as np
 
-
+ 
  
 class Greedy_Based_Funnel_Layer:
 

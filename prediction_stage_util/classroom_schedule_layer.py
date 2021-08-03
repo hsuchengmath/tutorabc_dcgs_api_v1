@@ -9,11 +9,15 @@ from gurobipy import *
 import pandas as pd
 
 
-class Class_Schedule_Layer:
+class Classroom_Schedule_Layer:
     def __init__(self):
         a = 0
 
-    def find_potential_consultant(self, sub_U2C2P, expect_user_num):
+    def find_potential_consultant(self, sub_U2C2P, constrain_user_num):
+        if constrain_user_num == 'free':
+            expect_user_num = 6
+        else:
+            expect_user_num = constrain_user_num
         u_list = list(sub_U2C2P.keys())
         if len(u_list) % expect_user_num == 0:
             con_num = int(len(u_list) / expect_user_num)
@@ -50,6 +54,7 @@ class Class_Schedule_Layer:
                     self.model.addVar(vtype=GRB.BINARY, 
                                       name="D_"+str(h)+'_'+str(j))  
         return var_C_dict, var_D_dict
+    
     def _init_or_model_(self):
         self.model = gp.Model("mip1")
         self.model.update()
@@ -68,12 +73,10 @@ class Class_Schedule_Layer:
         # third term
         for h in potential_con_list:
             self.model.addConstr(quicksum(var_D_dict[h][j] for j in mat_id_list) == 1)
-
-    
-                
-    def main(self, sub_U2M2P, sub_U2C2P, expect_user_num=6):
+          
+    def main(self, sub_U2M2P, sub_U2C2P, constrain_user_num):
         self._init_or_model_()
-        potential_con_list = self.find_potential_consultant(sub_U2C2P, expect_user_num=expect_user_num)
+        potential_con_list = self.find_potential_consultant(sub_U2C2P, constrain_user_num=constrain_user_num)
         user_id_list = list(sub_U2M2P.keys())
         mat_id_list = list(sub_U2M2P[user_id_list[0]].keys())
         R_dict = \

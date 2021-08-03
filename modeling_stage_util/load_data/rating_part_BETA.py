@@ -59,6 +59,6 @@ def collect_rating_data_func(batch_size=1000 ,exp_date=['2021-05-01','2021-06-01
         return df_rating_data
 
     #SchedulingID : SC001 ~ SC006
-
+ 
 if __name__ == '__main__':
     collect_rating_data_func(batch_size=1000, exp_date=['2021-01-01','2021-06-01'], save_path='data/rating_BETA_Jan.csv')

@@ -1,39 +1,40 @@
 
 
 
-
-
 import os
 import numpy as np
 import pandas as pd
-from object_orient_for_JL.data_process_mat import Data_Process
-from object_orient_for_JL.util import transform_date_to_age, train_model, predict_score, random_model_performance, ROC_curve_plot, DET_curve_plot
-from object_orient_for_JL.ngcf_model import Adj_Matx_Generator
-from object_orient_for_JL.ngcf_model import NGCF_Modeling
 import pickle
+import pymongo
+from modeling_stage_obj.data_process_mat import Data_Process_for_mat
+from modeling_stage_util.data_process_con import Data_Process_for_con
+from modeling_stage_util.util import train_model
 from load_data.rating_part_BETA import collect_rating_data_func
 from load_data.user_part_BETA import collect_user_data_func
 from load_data.consultant_part_BETA import collect_consultant_data_func
 from load_data.material_part_BETA import collect_mat_data_func
 from load_data.review_part_BETA import collect_review_data_func as collect_mat_review_data_func
 from load_data.con_review_part_BETA import collect_review_data_func as collect_con_review_data_func
-import pymongo
+from modeling_stage_util.util_for_ngcf_model import Adj_Matx_Generator, NGCF_Modeling
+
+
 
  
 
 class Modeling_Stage:
-    def __init__(self):
+    def __init__(self, start_date, train_date, end_date):
         '''
         we should receive uid,mat, con of class_dat
         '''
-        self.start_date = '2021-01-01'
-        self.train_date = '2021-04-01'
-        self.end_date = '2021-06-01'
-        self.save_path = 'saved_model/'
+        self.start_date = start_date
+        self.train_date = train_date
+        self.end_date = end_date
+        self.save_path = 'bucket_model/'
         # mongoDB init
         myclient = pymongo.MongoClient("mongodb://localhost:27017/")
         mydb = myclient["demo_database"]
-        self.mycol_AD = mydb["organic_class_data-"+'Adult']
+        self.mycol_AD = mydb["organic_class_data-Adult"]
+        #self.mycol_Jr = mydb["organic_class_data-Junior"]
  
     def go_to_mongoDB_to_get_user_and_mat(self, mycol, Adult_or_Junior='Adult'):
         uid_list, pb_id, mat_list, mat_type = list(), list(), list(), list()
@@ -54,7 +55,8 @@ class Modeling_Stage:
         return uid_list , pb_id, mat_list, mat_type
 
     def load_train_data(self):
-        additional_user , additional_pb_id, additional_mat, additional_mat_type = self.go_to_mongoDB_to_get_user_and_mat(mycol=self.mycol_AD)
+        additional_user , additional_pb_id, additional_mat, additional_mat_type = self.go_to_mongoDB_to_get_user_and_mat(mycol=self.mycol_AD, Adult_or_Junior='Adult')
+        #additional_user , additional_pb_id, additional_mat, additional_mat_type = self.go_to_mongoDB_to_get_user_and_mat(mycol=self.mycol_Jr, Adult_or_Junior='Junior')
         collect_rating_data_func(batch_size=1000, exp_date=[self.start_date,self.end_date], save_path='train_data/rating_BETA_Jan.csv')
         collect_user_data_func(additional_user=additional_user,additional_pb_id=additional_pb_id,rating_data_path='train_data/rating_BETA_Jan.csv',save_path='train_data/user_feature_BETA_Jan.csv')
         collect_consultant_data_func(rating_data_path='train_data/rating_BETA_Jan.csv',save_path='train_data/consultant_feature_BETA_Jan.csv')
@@ -206,7 +208,7 @@ class Modeling_Stage:
                 }
         with open(self.save_path+ 'model_mata_object_'+ pred_obj_name+'_'+mode +'.pkl', "wb") as f:
             pickle.dump(data, f)
-
+ 
     def main_for_pred_obj(self, pred_obj_name='mat'):
         # load data and data process
         rf_train_data_package_AD, rf_train_data_package_Jr , ngcf_data_process_package = self.data_process(pred_obj_name)
@@ -225,7 +227,6 @@ class Modeling_Stage:
         ngcf_obj_Jr = self.train_ngcf_model(ngcf_train_data_package_Jr, mode='Jr', save_model=True, pred_obj_name=pred_obj_name)
         self.save_Meta_object(ngcf_train_data_package_Jr,mode='Jr', pred_obj_name=pred_obj_name)
 
-
     def main(self): 
         # mat part
         self.main_for_pred_obj(pred_obj_name='mat')
@@ -233,10 +234,7 @@ class Modeling_Stage:
         self.main_for_pred_obj(pred_obj_name='con')
 
 
-
-modeling_stage_obj = Modeling_Stage()
-modeling_stage_obj.main()
-
-
-
+if __name__ == '__main__':
+    modeling_stage_obj = Modeling_Stage(start_date='2021-05-01',train_date = '2021-08-01',end_date = '2021-08-10')
+    modeling_stage_obj.main()
 

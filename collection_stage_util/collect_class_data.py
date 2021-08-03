@@ -4,12 +4,11 @@ import requests
 import pandas as pd
  
   
- 
+  
 
 class Collect_Class_Data_BY_RD_API:
     def __init__(self):
         self.url_for_range_date = 'http://tutorgroupapi.tutorabc.com/ReservationDataAccess/Class/GetClassInformationByStartHourSstNumber'
-        self.url_for_session_sn  = 'http://tutorgroupapi.tutorabc.com/ReservationDataAccess/Class/GetClassInformationBySessionSn'
         self.headers = {"Token": 'iGwDivB7W0s%3d'}
     
 

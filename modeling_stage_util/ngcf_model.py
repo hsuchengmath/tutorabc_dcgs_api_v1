@@ -22,7 +22,19 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tqdm import tqdm
 
-
+        lr = 0.001
+        self.epochs = 20
+        self.batch_size = 1024
+        # model
+        if load_model[0] is False:
+            self.model = NGCF(n_user, n_item, norm_adj,mat_individual_col).cuda()
+            # build loss func and opt
+            self.loss_function = nn.BCEWithLogitsLoss() 
+            self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        else:
+            self.model = NGCF(n_user, n_item, norm_adj,mat_individual_col).cuda()
+            self.model.load_state_dict(torch.load(load_model[1]))
+            self.model.eval()
 
 
 class NGCF(nn.Module):
@@ -124,18 +136,23 @@ class NGCF(nn.Module):
         return torch.sigmoid(prediction.view(-1))
 
 class NGCF_Modeling:
-    def __init__(self, n_user, n_item, norm_adj):
+    def __init__(self, n_user, n_item, norm_adj, load_model):
         lr = 0.001
         self.epochs = 20
         self.batch_size = 1024
         # model
-        self.model = NGCF(n_user, n_item, norm_adj).cuda()
-        # build loss func and opt
-        self.loss_function = nn.BCEWithLogitsLoss() 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-
+        if load_model[0] is False:
+            self.model = NGCF(n_user, n_item, norm_adj).cuda()
+            # build loss func and opt
+            self.loss_function = nn.BCEWithLogitsLoss() 
+            self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        else:
+            self.model = NGCF(n_user, n_item, norm_adj).cuda()
+            self.model.load_state_dict(torch.load(load_model[1]))
+            self.model.eval()
+ 
     
-    def train(self, train_user, train_item, train_label):
+    def train(self, train_user, train_item, train_label, save_model):
         print('Start to train NCF model!!')
         batch_num = int(len(train_label) / self.batch_size) + 1
         for epoch in tqdm(range(self.epochs)):
@@ -149,7 +166,11 @@ class NGCF_Modeling:
                 loss = self.loss_function(prediction, label)
                 loss.backward()
                 self.optimizer.step()
+        if save_model[0] is True:
+            torch.save(self.model.state_dict(), save_model[1])
         print('Finish training model!!')  
+        print('Finish training model!!')  
+
 
       
     def recommend(self, user, item, uid2index ,mat2index, rf_model, test_data, mode):
@@ -225,4 +246,4 @@ class NGCF_Modeling:
             if u not in U2M2P:
                 U2M2P[u] = dict()
             U2M2P[u][m] = predictions_list[i]
-        return U2M2P
+        return U2M2P 

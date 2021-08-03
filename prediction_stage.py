@@ -1,29 +1,32 @@
 
+  
+import pickle
 import pandas as pd
 from prediction_stage_util.classroom_schedule_layer import Classroom_Schedule_Layer
 from prediction_stage_util.funnel_layer import Greedy_Based_Funnel_Layer
-from prediction_stage_util.organic_test_data_to_model_input import Organic_Test_Data_TO_Model_Input
-from modeling_stage_util.ngcf_model import NGCF_Modeling
 from collection_stage_util.write_organic_data_to_db import Organic_Data_TO_DB
-import pickle
+from modeling_stage_util.ngcf_model import NGCF_Modeling
+from prediction_stage_util.distributed_layer import Distributed_Layer
+from prediction_stage_util.organic_test_data_to_model_input import Organic_Test_Data_TO_Model_Input
 
- 
 
- 
+  
 class Prediction_Stage:
-    def __init__(self, Adult_or_Junior='Adult'):
+    def __init__(self):
         # init parameter
         self.save_path = 'bucket_model/'
         # Classroom Schedule System
         self.classroom_schedule_layer_obj = Classroom_Schedule_Layer()
-        self.funnel_layer_obj = Greedy_Based_Funnel_Layer()
         # go to DB
         self.organic_data_to_MongoDB_obj = Organic_Data_TO_DB(db_name='demo_database',db_type='mongoDB')
         self.organic_data_to_MySQL_obj = Organic_Data_TO_DB(db_name='demo_database',db_type='MySQL')
 
 
     def build_model_input_from_organic_test_data(self, meta_object, Adult_or_Junior, pred_obj_name):
-        organic_test_data_to_model_input_obj = Organic_Test_Data_TO_Model_Input(meta_object=meta_object, Adult_or_Junior=Adult_or_Junior)
+        organic_test_data_to_model_input_obj = \
+            Organic_Test_Data_TO_Model_Input(meta_object=meta_object, 
+                                             Adult_or_Junior=Adult_or_Junior, 
+                                             pred_obj_name=pred_obj_name)
         test_data = organic_test_data_to_model_input_obj.main()
         return test_data 
 
@@ -50,7 +53,7 @@ class Prediction_Stage:
         feature_list_for_mat, feature_list_for_con = meta_object_mat['feature_list'], meta_object_con['feature_list']
         self.mat_individual_dat, self.con_individual_dat = meta_object_mat['mat_individual_dat'], meta_object_con['con_individual_dat']
         self.mat_overall_dat, self.con_overall_dat = meta_object_mat['mat_overall_dat'], meta_object_con['con_overall_dat']
-        # laod ngcf model
+        # laod ngcf model 
         if Adult_or_Junior == 'Adult':
             load_model_mat = [True, self.save_path+'ngcf_mat_AD_model.pt']
             load_model_con = [True, self.save_path+'ngcf_con_AD_model.pt']
@@ -66,7 +69,7 @@ class Prediction_Stage:
         uid2index = meta_object['uid2index']
         if pred_obj_name == 'mat':
             pred_obj2index = meta_object['mat2index']
-        elif red_obj_name == 'con':
+        elif pred_obj_name == 'con':
             pred_obj2index = meta_object['con2index']
         feature_list = meta_object['feature_list']
         U2pred_obj2P= ngcf_obj.recommend(test_data, uid2index ,pred_obj2index, rf_model, feature_list)
@@ -124,25 +127,27 @@ class Prediction_Stage:
             # funnel part (mat)
             sub_U2M2P_list = self.funnel_layer_obj._to_mat(sub_U2M2P_list, sub_M2U2P_list)
             # classroom schedule layer part
-            old_con = list()
-            for sub_U2M2P in sub_U2M2P_list:
-                dat = self.classroom_schedule_layer_obj.main(sub_U2M2P)
-                old_con.append(self.classroom_schedule_layer_obj.used_con)
+            for i in range(len(sub_U2M2P_list)):
+                sub_U2M2P = sub_U2M2P_list[i]
+                sub_U2C2P = sub_U2C2P_list[i]
+                dat = self.classroom_schedule_layer_obj.main(sub_U2M2P, sub_U2C2P, constrain_user_num=constrain_num)
                 scheduled_classroom.append(dat)
-            distributed_layer_obj.recycle_con(old_con)
         scheduled_classroom = pd.concatenate(scheduled_classroom, axis=0)
         # store scheduled_classroom to MySQL (~8/3)
         self.organic_data_to_MySQL_obj.write_scheduled_classroom_to_db(scheduled_classroom=scheduled_classroom)
         return scheduled_classroom
 
-  
 
 
-constrain_user_num2user_id = \
-    {
-        1 : [],
-        2 : [],
-        3 : [],
-        4 : [],
-        5 : []
-    }
+if __name__ == '__main__':
+    constrain_user_num2user_id = \
+        {
+            1 : [],
+            2 : [],
+            3 : [],
+            4 : [],
+            5 : []
+        }
+    prediction_stage_obj = Prediction_Stage()
+    prediction_stage_obj.main(constrain_user_num2user_id=constrain_user_num2user_id, Adult_or_Junior='Adult')
+

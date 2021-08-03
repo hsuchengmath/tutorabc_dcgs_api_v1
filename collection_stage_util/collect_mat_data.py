@@ -61,8 +61,9 @@ class Collect_Material_From_DimMaterialPool:
         weight_of_new_mat_list = list()
         for i in range(len(new_mat_list)):
             weight = 0    
+            mat = new_mat_list[i]
             for uid in user_list:
-                if mat in set(user2history_mat[uid]):
+                if mat in list(set(user2history_mat[uid])):
                     weight +=1
             weight_of_new_mat_list.append(weight)
         return weight_of_new_mat_list
@@ -79,4 +80,4 @@ class Collect_Material_From_DimMaterialPool:
             new_mat_list = list(set(new_mat_list) - {sampled_mat})
             sampled_mat_list.append(sampled_mat)
         return self.old_mat_list + new_mat_list
- 
+  
