@@ -24,16 +24,21 @@ def add_label_feature_to_rating_data(rating_data):
     return rating_data
 
 
-def remove_repeat_bias_data_in_train_rating_data(train_rating_data):
+def remove_repeat_bias_data_in_train_rating_data(train_rating_data, pred_obj_name='mat'):
     # In train data, remove all same score data
     # Remove mat for each high pos_ratio user (?)
     uid_list = list(set(train_rating_data['client_sn']))
     rating_data_wo_repeat = list()
     for uid in tqdm(uid_list):
         dat = train_rating_data[train_rating_data['client_sn'] == uid]
-        if len(set(dat['material_points'])) > 1:
-            rating_data_wo_repeat.append(dat)
-            score_list = list(dat['label'])
+        if pred_obj_name == 'mat':
+            if len(set(dat['material_points'])) > 1:
+                rating_data_wo_repeat.append(dat)
+                score_list = list(dat['label'])
+        elif pred_obj_name == 'con':
+            if len(set(dat['consultant_points'])) > 1:
+                rating_data_wo_repeat.append(dat)
+                score_list = list(dat['label'])            
     train_rating_data = pd.concat(rating_data_wo_repeat).reset_index(drop=True)
     return train_rating_data
 

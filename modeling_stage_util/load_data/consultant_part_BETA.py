@@ -6,7 +6,7 @@ from tqdm import tqdm
 from util import SQL_query
 
  
-def collect_review_data_func(rating_data_path=None, save_path=None, batch_size = 5000):
+def collect_consultant_data_func(rating_data_path=None, save_path=None, batch_size = 5000):
     # load target data
     if rating_data_path is None:
         rating = pd.read_csv('rating_BETA.csv')
@@ -44,7 +44,7 @@ def collect_review_data_func(rating_data_path=None, save_path=None, batch_size =
 
 
 if __name__ == '__main__':
-    collect_review_data_func(rating_data_path='data/rating_BETA_Jan.csv',save_path='data/consultant_feature_BETA_Jan.csv')
+    collect_consultant_data_func(rating_data_path='data/rating_BETA_Jan.csv',save_path='data/consultant_feature_BETA_Jan.csv')
 
 
 

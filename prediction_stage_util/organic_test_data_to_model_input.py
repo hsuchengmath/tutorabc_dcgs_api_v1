@@ -5,9 +5,9 @@ from object_orient_for_JL.util import transform_date_to_age
 from object_orient_for_JL.interest_tag_overlap_num import overlap_num_func_main
 import pandas as pd
 
-
  
-
+ 
+ 
 class Organic_Test_Data_TO_Model_Input:
     def __init__(self, mat_individual_dat,mat_overall_dat, feature_list, user_mode):
         # reload database

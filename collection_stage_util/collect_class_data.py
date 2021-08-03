@@ -4,7 +4,7 @@ import requests
 import pandas as pd
  
   
-
+ 
 
 class Collect_Class_Data_BY_RD_API:
     def __init__(self):
