@@ -31,7 +31,7 @@ class Collection_Stage:
         self.organic_data_to_db_obj.define_collection(collection_name='organic_class_data-'+Adult_or_Junior)
         self.organic_data_to_db_obj.write_class_data_with_mat_to_db(client_sn=u_list_str, MaterialID=m_list_str, con_sn=c_list_str,attend_level=a_list_str)
 
-
+ 
     def main(self, parameter=dict):
         StartDateTime = parameter['StartDateTime']
         Adult_or_Junior = parameter['Adult_or_Junior']
