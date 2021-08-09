@@ -56,7 +56,7 @@ class Collect_User_TO_History_Mat:
                 and account_type = N'正常使用客戶'
                 and HCatgId = 'EN'
             '''
-            sql = sql.format(str(user_id_list[i]), MaterialType)
+            sql = sql.format(str(uid), MaterialType)
             dat = SQL_query(query=sql, database='BI_EDW')
             history_mat = list(set(dat['MaterialID']))
             user2history_mat[uid] = history_mat

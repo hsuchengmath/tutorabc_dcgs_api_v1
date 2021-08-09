@@ -5,7 +5,7 @@
 
 
 import pandas as pd
-from load_data.util import SQL_query
+from modeling_stage_util.load_data.util import SQL_query
 from tqdm import tqdm
 
  

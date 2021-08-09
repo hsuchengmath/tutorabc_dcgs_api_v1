@@ -1,16 +1,19 @@
 
-  
+
 import pickle
 import pandas as pd
 from prediction_stage_util.classroom_schedule_layer import Classroom_Schedule_Layer
 from prediction_stage_util.funnel_layer import Greedy_Based_Funnel_Layer
 from collection_stage_util.write_organic_data_to_db import Organic_Data_TO_DB
 from modeling_stage_util.ngcf_model import NGCF_Modeling
-from prediction_stage_util.distributed_layer import Distributed_Layer
+from prediction_stage_util.distributed_layer import Distributed_Layer, Waterfall_Layer
 from prediction_stage_util.organic_test_data_to_model_input import Organic_Test_Data_TO_Model_Input
+from prediction_stage_util.find_potential_consultant_layer import Find_Potential_Consultant_Layer
 
 
-  
+
+
+
 class Prediction_Stage:
     def __init__(self):
         # init parameter
@@ -20,7 +23,7 @@ class Prediction_Stage:
         # go to DB
         self.organic_data_to_MongoDB_obj = Organic_Data_TO_DB(db_name='demo_database',db_type='mongoDB')
         self.organic_data_to_MySQL_obj = Organic_Data_TO_DB(db_name='demo_database',db_type='MySQL')
-
+ 
 
     def build_model_input_from_organic_test_data(self, meta_object, Adult_or_Junior, pred_obj_name):
         organic_test_data_to_model_input_obj = \
@@ -50,7 +53,7 @@ class Prediction_Stage:
         user_num_for_mat, user_num_for_con = meta_object_mat['user_num'], meta_object_con['user_num']
         mat_num, con_num = meta_object_mat['mat_num'], meta_object_con['con_num']
         normalized_adj_for_mat, normalized_adj_for_con = meta_object_mat['normalized_adj'], meta_object_con['normalized_adj']
-        feature_list_for_mat, feature_list_for_con = meta_object_mat['feature_list'], meta_object_con['feature_list']
+        #feature_list_for_mat, feature_list_for_con = meta_object_mat['feature_list'], meta_object_con['feature_list']
         self.mat_individual_dat, self.con_individual_dat = meta_object_mat['mat_individual_dat'], meta_object_con['con_individual_dat']
         self.mat_overall_dat, self.con_overall_dat = meta_object_mat['mat_overall_dat'], meta_object_con['con_overall_dat']
         # laod ngcf model 
@@ -63,7 +66,7 @@ class Prediction_Stage:
         ngcf_obj_mat = NGCF_Modeling(user_num_for_mat, mat_num, normalized_adj_for_mat, load_model=load_model_mat)
         ngcf_obj_con = NGCF_Modeling(user_num_for_con, con_num, normalized_adj_for_con, load_model=load_model_con)
         return rf_model_mat,rf_model_con, meta_object_mat,meta_object_con, ngcf_obj_mat, ngcf_obj_con
-
+ 
 
     def build_U2Pred_Obj2P_data(self, test_data, rf_model ,meta_object, ngcf_obj, pred_obj_name):
         uid2index = meta_object['uid2index']
@@ -100,42 +103,51 @@ class Prediction_Stage:
         U2C2P, _, con_list = self.build_U2Pred_Obj2P_data(test_data=test_data_con, 
                                                           rf_model=rf_model_con ,
                                                           meta_object=meta_object_con, 
-                                                          ngcf_obj=ngcf_obj_mat, 
+                                                          ngcf_obj=ngcf_obj_con, 
                                                           pred_obj_name='con')
-        # store U2M2P, U2C2P to mongoDB (~8/3)
+        # store U2M2P, U2C2P to mongoDB
         self.organic_data_to_MongoDB_obj.define_collection(collection_name='U2M2P')
         self.organic_data_to_MongoDB_obj.write_U2Ent2prob_to_db(U2Ent2P=U2M2P, user_list=user_list, ent_list=mat_list, pred_obj_name='mat')
         self.organic_data_to_MongoDB_obj.define_collection(collection_name='U2C2P')
         self.organic_data_to_MongoDB_obj.write_U2Ent2prob_to_db(U2Ent2P=U2C2P, user_list=user_list, ent_list=con_list, pred_obj_name='con')
-        # build scheduled_classroom
+        
+
+        # waterfall layer
+        constrain_num_list = [1,2,3,4,5,6]
+        constrain_user_num2user_id = Waterfall_Layer(constrain_user_num2user_id, constrain_num_list)
+
+        # distributed layer
+        constrained_U2M2P_list, constrained_user_list = list(), list()
+        distributed_layer_obj = Distributed_Layer(U2M2P, user_list, mat_list, constrain_user_num2user_id)
+        for constrain_num in constrain_num_list:
+            constrained_U2M2P = None
+            if len(constrain_user_num2user_id[constrain_num]) != 0:
+                constrained_U2M2P, constrained_user = distributed_layer_obj.main(constrain_num=constrain_num)
+            constrained_U2M2P_list.append(constrained_U2M2P)
+            constrained_user_list.append(constrained_user)
+
+        # funnel layer
+        self.funnel_layer_obj = Greedy_Based_Funnel_Layer(constrained_U2M2P_list, constrain_num_list, mat_list)
+        subR_list, subgroup_constrained_num_list = self.funnel_layer_obj.main(constrained_U2M2P_list, constrain_num_list)
+        
+        # find potential consultant layer
+        self.find_potential_consultant_layer_obj = Find_Potential_Consultant_Layer(U2C2P, con_list, salary_list=None, salary_bar=None)
+        subC_list, potential_con_list = self.find_potential_consultant_layer_obj.main(subR_list, subgroup_constrained_num_list)
+
+        # classroom schedule layer
         scheduled_classroom = list()
-        distributed_layer_obj = Distributed_Layer(U2M2P, U2C2P, user_list, mat_list, con_list, constrain_user_num2user_id)
-        for constrain_num in [1,2,3,4,5,'free']:
-            while constrain_num in [1,2,3,4,5,'free','additional']:
-                distributed_layer_obj.main(constrain_num=constrain_num)
-                distributed_user_list = distributed_layer_obj.distributed_user_list
-                distributed_U2M2P = distributed_layer_obj.distributed_U2M2P
-                distributed_U2C2P = distributed_layer_obj.distributed_U2C2P
-                # funnel layer init
-                self.funnel_layer_obj = Greedy_Based_Funnel_Layer(user_list=distributed_user_list, mat_list=mat_list, con_list=con_list)
-                # funnel part (user)
-                sub_U2M2P_list, sub_U2C2P_list, sub_M2U2P_list = self.funnel_layer_obj._to_user(U2M2P=distributed_U2M2P, U2C2P=distributed_U2C2P)
-                if sub_U2M2P_list is None or sub_U2C2P_list is None or sub_M2U2P_list is None:
-                    constrain_num = 'additional'
-                else:
-                    constrain_num = 'non_additional'
-            # funnel part (mat)
-            sub_U2M2P_list = self.funnel_layer_obj._to_mat(sub_U2M2P_list, sub_M2U2P_list)
-            # classroom schedule layer part
-            for i in range(len(sub_U2M2P_list)):
-                sub_U2M2P = sub_U2M2P_list[i]
-                sub_U2C2P = sub_U2C2P_list[i]
-                dat = self.classroom_schedule_layer_obj.main(sub_U2M2P, sub_U2C2P, constrain_user_num=constrain_num)
-                scheduled_classroom.append(dat)
+        for i in range(len(subR_list)):
+            potential_con_num = subgroup_constrained_num_list[i]
+            dat = self.classroom_schedule_layer_obj.main(subR_list[i], subC_list[i], potential_con_num, potential_con_list)
+            scheduled_classroom.append(dat)
         scheduled_classroom = pd.concatenate(scheduled_classroom, axis=0)
         # store scheduled_classroom to MySQL (~8/3)
         self.organic_data_to_MySQL_obj.write_scheduled_classroom_to_db(scheduled_classroom=scheduled_classroom)
         return scheduled_classroom
+
+        
+
+
 
 
 
@@ -146,8 +158,8 @@ if __name__ == '__main__':
             2 : [],
             3 : [],
             4 : [],
-            5 : []
+            5 : [],
+            6 : [],
         }
     prediction_stage_obj = Prediction_Stage()
     prediction_stage_obj.main(constrain_user_num2user_id=constrain_user_num2user_id, Adult_or_Junior='Adult')
-

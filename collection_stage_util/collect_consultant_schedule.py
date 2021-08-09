@@ -61,3 +61,8 @@ def get_candidate_consultant_by_time(date=str, hour=int):
     sql = sql.format(week, hour)
     dat = SQL_query(query=sql, database='cbs_tw')
     return list(set(dat['con_sn']))
+
+
+def filter_layer_con_canJr(con_list):
+    con_list_canJr = con_list
+    return con_list_canJr

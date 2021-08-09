@@ -5,7 +5,7 @@
  
 import pymongo
  
-
+ 
 class Organic_Data_TO_DB:
     def __init__(self, db_name='demo_database', db_type='mongoDB'):
         if db_type == 'mongoDB':

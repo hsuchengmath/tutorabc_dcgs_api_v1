@@ -1,12 +1,17 @@
 
+import pymongo
+from modeling_stage_util.data_process_mat import Data_Process_for_mat
+from modeling_stage_util.data_process_con import Data_Process_for_con
+import pandas as pd
 
 
-
+ 
 class Organic_Test_Data_TO_Model_Input:
     def __init__(self, meta_object, Adult_or_Junior, pred_obj_name):
         # go to mongoDB
         myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-        self.mydb = myclient['organic_class_data-'+Adult_or_Junior]
+        self.mydb = myclient['demo_database']
+        self.mycol = self.mydb['organic_class_data-'+Adult_or_Junior]
         # meta data and data_process_obj
         self.feature_list = meta_object['feature_list']
         if pred_obj_name == 'mat':
@@ -17,6 +22,10 @@ class Organic_Test_Data_TO_Model_Input:
             self.pred_obj_overall_dat = meta_object['con_overall_dat']
             self.pred_obj_individual_dat = meta_object['con_individual_dat']
             self.data_process_obj = Data_Process_for_con()
+        # init
+        self.pred_obj_name = pred_obj_name
+        self.Adult_or_Junior = Adult_or_Junior
+
 
     def add_data_to_UA_pred_obj_dat(self, UA_pred_obj_dat, u_list, ent_list, a_list, ent_name):
         for i in range(len(u_list)):
@@ -26,7 +35,7 @@ class Organic_Test_Data_TO_Model_Input:
                 UA_pred_obj_dat['attend_level'].append(a_list[i])
         return UA_pred_obj_dat
 
- 
+
     def build_UA_pred_obj_dat(self, pred_obj_name):
         # init 
         if pred_obj_name == 'mat':
@@ -53,7 +62,9 @@ class Organic_Test_Data_TO_Model_Input:
             self.data_process_obj.data_process_of_train_rating_data(train_rating_data=UA_pred_obj_dat, 
                                                                     individual_dat=self.pred_obj_individual_dat,
                                                                     overall_dat=self.pred_obj_overall_dat,
-                                                                    Adult_or_Junior=self.Adult_or_Junior)
+                                                                    Adult_or_Junior=self.Adult_or_Junior,
+                                                                    train_or_test='test')
         test_data = test_data[self.feature_list]
         return test_data
 
+ 

@@ -6,17 +6,17 @@ import numpy as np
 import pandas as pd
 import pickle
 import pymongo
-from modeling_stage_obj.data_process_mat import Data_Process_for_mat
+from modeling_stage_util.data_process_mat import Data_Process_for_mat
 from modeling_stage_util.data_process_con import Data_Process_for_con
 from modeling_stage_util.util import train_model
-from load_data.rating_part_BETA import collect_rating_data_func
-from load_data.user_part_BETA import collect_user_data_func
-from load_data.consultant_part_BETA import collect_consultant_data_func
-from load_data.material_part_BETA import collect_mat_data_func
-from load_data.review_part_BETA import collect_review_data_func as collect_mat_review_data_func
-from load_data.con_review_part_BETA import collect_review_data_func as collect_con_review_data_func
-from modeling_stage_util.util_for_ngcf_model import Adj_Matx_Generator, NGCF_Modeling
-
+from modeling_stage_util.load_data.rating_part_BETA import collect_rating_data_func
+from modeling_stage_util.load_data.user_part_BETA import collect_user_data_func
+from modeling_stage_util.load_data.consultant_part_BETA import collect_consultant_data_func
+from modeling_stage_util.modeling_stage_util.load_data.material_part_BETA import collect_mat_data_func
+from modeling_stage_util.load_data.review_part_BETA import collect_review_data_func as collect_mat_review_data_func
+from modeling_stage_util.load_data.con_review_part_BETA import collect_review_data_func as collect_con_review_data_func
+from modeling_stage_util.util_for_ngcf_model import Adj_Matx_Generator
+from modeling_stage_util.ngcf_model import NGCF_Modeling
 
 
  
@@ -51,7 +51,7 @@ class Modeling_Stage:
         elif Adult_or_Junior == 'Junior':
             pb_id = [33 for _ in range(len(uid_list))]
         mat_list = list(set(mat_list))
-        mat_type = [Adult_or_Junior for _ in range(len(mat_list_AD))]
+        mat_type = [Adult_or_Junior for _ in range(len(mat_list))]
         return uid_list , pb_id, mat_list, mat_type
 
     def load_train_data(self):
@@ -64,55 +64,58 @@ class Modeling_Stage:
         collect_mat_review_data_func(rating_data_path='train_data/rating_BETA_Jan.csv',save_path='train_data/review_BETA_Jan.csv')
         collect_mat_review_data_func(rating_data_path='train_data/rating_BETA_Jan.csv',save_path='train_data/con_review_BETA_Jan.csv')
 
-    def data_process(self, pred_obj_name):
+    def data_process(self, pred_obj_name,mode):
         if pred_obj_name == 'mat':
             self.load_train_data()
             data_process_obj = Data_Process_for_mat(self.start_date, self.train_date, self.end_date)
         elif pred_obj_name == 'con':
             data_process_obj = Data_Process_for_con(self.start_date, self.train_date, self.end_date)
-        data_process_obj.main()
-        #
-        pred_obj_individual_dat_Jr = data_process_obj.pred_obj_individual_dat_Jr
-        pred_obj_overall_dat_Jr = data_process_obj.pred_obj_overall_dat_Jr
-        pred_obj_individual_dat_AD = data_process_obj.pred_obj_individual_dat_AD
-        pred_obj_overall_dat_AD = data_process_obj.pred_obj_overall_dat_AD
-        train_data_AD_wo_na = data_process_obj.train_data_AD_wo_na
-        train_data_Jr_wo_na = data_process_obj.train_data_Jr_wo_na
-        train_data_AD = data_process_obj.train_data_AD
-        train_data_Jr = data_process_obj.train_data_Jr
-        label_AD = data_process_obj.label_AD
-        label_Jr = data_process_obj.label_Jr
-        feature_list = data_process_obj.feature_list
-        #
-        rf_train_data_package_AD = \
-            {
-             'train_data' : train_data_AD_wo_na,
-             'label' : label_AD, 
-             'pred_obj_overall_dat' : pred_obj_overall_dat_AD,
-             'pred_obj_individual_dat' : pred_obj_individual_dat_AD,
-             'feature_list' : feature_list,
-            }
-        rf_train_data_package_Jr = \
-            {
-             'train_data' : train_data_Jr_wo_na,
-             'label' : label_Jr,
-             'pred_obj_overall_dat' : pred_obj_overall_dat_Jr,
-             'pred_obj_individual_dat' ; pred_obj_individual_dat_Jr,
-             'feature_list' : feature_list,
-            }        
+        if mode == 'collect_recent_data+train_model':
+            data_process_obj.main()
+            #
+            pred_obj_individual_dat_Jr = data_process_obj.pred_obj_individual_dat_Jr
+            pred_obj_overall_dat_Jr = data_process_obj.pred_obj_overall_dat_Jr
+            pred_obj_individual_dat_AD = data_process_obj.pred_obj_individual_dat_AD
+            pred_obj_overall_dat_AD = data_process_obj.pred_obj_overall_dat_AD
+            train_data_AD_wo_na = data_process_obj.train_data_AD_wo_na
+            train_data_Jr_wo_na = data_process_obj.train_data_Jr_wo_na
+            train_data_AD = data_process_obj.train_data_AD
+            train_data_Jr = data_process_obj.train_data_Jr
+            label_AD = data_process_obj.label_AD
+            label_Jr = data_process_obj.label_Jr
+            feature_list = data_process_obj.feature_list
+            #
+            rf_train_data_package_AD = \
+                {
+                'train_data' : train_data_AD_wo_na,
+                'label' : label_AD, 
+                'pred_obj_overall_dat' : pred_obj_overall_dat_AD,
+                'pred_obj_individual_dat' : pred_obj_individual_dat_AD,
+                'feature_list' : feature_list,
+                }
+            rf_train_data_package_Jr = \
+                {
+                'train_data' : train_data_Jr_wo_na,
+                'label' : label_Jr,
+                'pred_obj_overall_dat' : pred_obj_overall_dat_Jr,
+                'pred_obj_individual_dat' : pred_obj_individual_dat_Jr,
+                'feature_list' : feature_list,
+                }        
 
-        ngcf_data_process_package = \
-            {
-             'train_data_AD' : train_data_AD,
-             'train_data_Jr' : train_data_Jr
-            }
-        return rf_train_data_package_AD, rf_train_data_package_Jr , ngcf_data_process_package
+            ngcf_data_process_package = \
+                {
+                'train_data_AD' : train_data_AD,
+                'train_data_Jr' : train_data_Jr
+                }
+            return rf_train_data_package_AD, rf_train_data_package_Jr , ngcf_data_process_package
+        else:
+            return None, None, None
 
     def train_random_forest_model(self, train_data_package, mode='AD', save_model=False, pred_obj_name=None):
         train_data = train_data_package['train_data']
         label = train_data_package['label']
         # train RF model
-        model_rf = train_model(train_data=train_datatrain_data, label=label_AD)
+        model_rf = train_model(train_data=train_data, label=label)
         if save_model is True:
             # store model
             pickle.dump(model_rf, open(self.save_path + 'rf_'+pred_obj_name+'_'+mode+'_model.pickle', 'wb'))
@@ -134,11 +137,11 @@ class Modeling_Stage:
             pred_obj2index[pred_obj] = pred_obj_index
             pred_obj_index +=1
         client_sn_train = [uid2index[uid] for uid in client_sn_train]
-        pred_obj_train = [pred_obj2index[pred_obj] for pred_obj in pred_objpred_obj_train]
+        pred_obj_train = [pred_obj2index[pred_obj] for pred_obj in pred_obj_train]
         label_train = list(train_data['label'])
         user_num = len(client_sn)
         item_num = len(pred_obj_list)
-        return user_num, item_num, client_sn_train, pred_obj_train, label_train, interaction_train, uid2index, pred_obj2index
+        return user_num, item_num, client_sn_train, pred_obj_train, label_train, uid2index, pred_obj2index
  
     def build_adj_matrix(self, user_num, item_num, train_uid_dat_with_train_mat_dat):
         amg_obj = Adj_Matx_Generator(user_num, item_num, train_uid_dat_with_train_mat_dat)
@@ -186,7 +189,7 @@ class Modeling_Stage:
             data = \
                 {
                 'user_num' : ngcf_train_data_package['user_num'], 
-                'mat_num' : ngcf_train_data_package['item_num'],,
+                'mat_num' : ngcf_train_data_package['item_num'],
                 'uid2index' : ngcf_train_data_package['uid2index'], 
                 'mat2index' : ngcf_train_data_package['pred_obj2index'],
                 'normalized_adj' : ngcf_train_data_package['adj'], 
@@ -198,7 +201,7 @@ class Modeling_Stage:
             data = \
                 {
                 'user_num' : ngcf_train_data_package['user_num'], 
-                'con_num' : ngcf_train_data_package['item_num'],,
+                'con_num' : ngcf_train_data_package['item_num'],
                 'uid2index' : ngcf_train_data_package['uid2index'], 
                 'con2index' : ngcf_train_data_package['pred_obj2index'],
                 'normalized_adj' : ngcf_train_data_package['adj'], 
@@ -209,32 +212,36 @@ class Modeling_Stage:
         with open(self.save_path+ 'model_mata_object_'+ pred_obj_name+'_'+mode +'.pkl', "wb") as f:
             pickle.dump(data, f)
  
-    def main_for_pred_obj(self, pred_obj_name='mat'):
+    def main_for_pred_obj(self, pred_obj_name='mat',mode='collect_recent_data+train_model'):
         # load data and data process
-        rf_train_data_package_AD, rf_train_data_package_Jr , ngcf_data_process_package = self.data_process(pred_obj_name)
-        # train random forest model and store model to bucket (AD)
-        self.train_random_forest_model(rf_train_data_package=rf_train_data_package_AD,mode='AD', save_model=True, pred_obj_name=pred_obj_name)
-        # train random forest model and store model to bucket (Jr)
-        self.train_random_forest_model(rf_train_data_package=rf_train_data_package_Jr, mode='Jr',save_model=True, pred_obj_name=pred_obj_name)
-        # build_ngcf_train_data (AD part)
-        ngcf_train_data_package_AD = self.build_ngcf_train_data(train_data=ngcf_data_process_package['train_data_AD'], pred_obj_name=pred_obj_name)
-        # build_ngcf_train_data (Jr part)
-        ngcf_train_data_package_Jr = self.build_ngcf_train_data(train_data=ngcf_data_process_package['train_data_Jr'], pred_obj_name=pred_obj_name)
-        # train model (AD part)
-        ngcf_obj_AD = self.train_ngcf_model(ngcf_train_data_package_AD, mode='AD', save_model=True, pred_obj_name=pred_obj_name)
-        self.save_Meta_object(ngcf_train_data_package_AD,mode='AD', pred_obj_name=pred_obj_name)
-        # train model (Jr part)
-        ngcf_obj_Jr = self.train_ngcf_model(ngcf_train_data_package_Jr, mode='Jr', save_model=True, pred_obj_name=pred_obj_name)
-        self.save_Meta_object(ngcf_train_data_package_Jr,mode='Jr', pred_obj_name=pred_obj_name)
+        rf_train_data_package_AD, rf_train_data_package_Jr , ngcf_data_process_package = self.data_process(pred_obj_name,mode)
+        if mode == 'collect_recent_data+train_model':
+            # train random forest model and store model to bucket (AD)
+            self.train_random_forest_model(train_data_package=rf_train_data_package_AD,mode='AD', save_model=True, pred_obj_name=pred_obj_name)
+            # train random forest model and store model to bucket (Jr)
+            self.train_random_forest_model(train_data_package=rf_train_data_package_Jr, mode='Jr',save_model=True, pred_obj_name=pred_obj_name)
+            # build_ngcf_train_data (AD part)
+            ngcf_train_data_package_AD = self.build_ngcf_train_data(train_data=ngcf_data_process_package['train_data_AD'], pred_obj_name=pred_obj_name)
+            # build_ngcf_train_data (Jr part)
+            ngcf_train_data_package_Jr = self.build_ngcf_train_data(train_data=ngcf_data_process_package['train_data_Jr'], pred_obj_name=pred_obj_name)
+            # train model (AD part)
+            ngcf_obj_AD = self.train_ngcf_model(ngcf_train_data_package_AD, mode='AD', save_model=True, pred_obj_name=pred_obj_name)
+            self.save_Meta_object(ngcf_train_data_package_AD,rf_train_data_package_AD,mode='AD', pred_obj_name=pred_obj_name)
+            # train model (Jr part)
+            ngcf_obj_Jr = self.train_ngcf_model(ngcf_train_data_package_Jr, mode='Jr', save_model=True, pred_obj_name=pred_obj_name)
+            self.save_Meta_object(ngcf_train_data_package_Jr,rf_train_data_package_Jr,mode='Jr', pred_obj_name=pred_obj_name)
 
-    def main(self): 
+
+    def main(self, mode='collect_recent_data+train_model'): 
         # mat part
-        self.main_for_pred_obj(pred_obj_name='mat')
+        self.main_for_pred_obj(pred_obj_name='mat', mode=mode)
         # con part
-        self.main_for_pred_obj(pred_obj_name='con')
+        self.main_for_pred_obj(pred_obj_name='con', mode=mode)
 
 
 if __name__ == '__main__':
+    #mode='collect_recent_data'
+    mode='collect_recent_data+train_model'
     modeling_stage_obj = Modeling_Stage(start_date='2021-05-01',train_date = '2021-08-01',end_date = '2021-08-10')
     modeling_stage_obj.main()
 

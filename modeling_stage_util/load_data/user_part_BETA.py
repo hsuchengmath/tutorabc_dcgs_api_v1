@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 #from load_data.util_BETA import SQL_query, find_user_interest_tag, build_E2E_func
-from util import SQL_query, find_user_interest_tag, build_E2E_func
+from modeling_stage_util.load_data.util import SQL_query, find_user_interest_tag, build_E2E_func
  
 def build_E2E(client_sn=None, PurchaseBrandID=None):
     # jobID -> jobname

@@ -12,21 +12,7 @@ import pandas as pd
 class Classroom_Schedule_Layer:
     def __init__(self):
         a = 0
-
-    def find_potential_consultant(self, sub_U2C2P, constrain_user_num):
-        if constrain_user_num == 'free':
-            expect_user_num = 6
-        else:
-            expect_user_num = constrain_user_num
-        u_list = list(sub_U2C2P.keys())
-        if len(u_list) % expect_user_num == 0:
-            con_num = int(len(u_list) / expect_user_num)
-        else:
-            con_num = int(len(u_list) / expect_user_num) + 1
-        potential_con_list = list(sub_U2C2P[list(sub_U2C2P.keys())[0]].keys())
-        potential_con_list = random.sample(potential_con_list, con_num)
-        return potential_con_list
-    
+     
     def build_R_dict(self, user_id_list, mat_id_list, potential_con_list, sub_U2M2P, sub_U2C2P):
         R_dict = dict()
         for i in user_id_list:
@@ -55,18 +41,16 @@ class Classroom_Schedule_Layer:
                                       name="D_"+str(h)+'_'+str(j))  
         return var_C_dict, var_D_dict
     
-    def _init_or_model_(self):
+    def _init_to_model_(self):
         self.model = gp.Model("mip1")
         self.model.update()
         self.model.setParam('OutputFlag',0)
      
-    def build_constrain(self,user_id_list, mat_id_list, potential_con_list, var_C_dict, var_D_dict):
+    def build_constrain(self,user_id_list, mat_id_list, potential_con_list, var_C_dict, var_D_dict, potential_con_num):
         # build constrain
         # first term
         for h in potential_con_list:
-            self.model.addConstr(quicksum(var_C_dict[i][h] for i in user_id_list) <=6)
-        for h in potential_con_list:
-            self.model.addConstr(quicksum(var_C_dict[i][h] for i in user_id_list) >=4)
+            self.model.addConstr(quicksum(var_C_dict[i][h] for i in user_id_list) == potential_con_num)
         # second term
         for i in user_id_list:
             self.model.addConstr(quicksum(var_C_dict[i][h] for h in potential_con_list) == 1)
@@ -74,9 +58,8 @@ class Classroom_Schedule_Layer:
         for h in potential_con_list:
             self.model.addConstr(quicksum(var_D_dict[h][j] for j in mat_id_list) == 1)
           
-    def main(self, sub_U2M2P, sub_U2C2P, constrain_user_num):
-        self._init_or_model_()
-        potential_con_list = self.find_potential_consultant(sub_U2C2P, constrain_user_num=constrain_user_num)
+    def main(self, sub_U2M2P, sub_U2C2P, potential_con_num, potential_con_list):
+        self._init_to_model_()
         user_id_list = list(sub_U2M2P.keys())
         mat_id_list = list(sub_U2M2P[user_id_list[0]].keys())
         R_dict = \
@@ -91,7 +74,7 @@ class Classroom_Schedule_Layer:
                 for j in mat_id_list \
         )
         self.model.setObjective(operation, GRB.MAXIMIZE)
-        self.build_constrain(user_id_list, mat_id_list, potential_con_list, var_C_dict, var_D_dict)
+        self.build_constrain(user_id_list, mat_id_list, potential_con_list, var_C_dict, var_D_dict, potential_con_num)
         self.model.optimize()
         # 透過屬性objVal顯示最佳解
         #print('Obj: %g' % self.model.objVal)

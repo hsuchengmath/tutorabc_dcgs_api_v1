@@ -4,7 +4,7 @@
 
 import pandas as pd
 from tqdm import tqdm
-from load_data.util import SQL_query
+from modeling_stage_util.load_data.util import SQL_query
 
  
 def collect_review_data_func(rating_data_path=None, save_path=None, batch_size = 5000):

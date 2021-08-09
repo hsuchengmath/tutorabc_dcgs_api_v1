@@ -22,19 +22,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tqdm import tqdm
 
-        lr = 0.001
-        self.epochs = 20
-        self.batch_size = 1024
-        # model
-        if load_model[0] is False:
-            self.model = NGCF(n_user, n_item, norm_adj,mat_individual_col).cuda()
-            # build loss func and opt
-            self.loss_function = nn.BCEWithLogitsLoss() 
-            self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        else:
-            self.model = NGCF(n_user, n_item, norm_adj,mat_individual_col).cuda()
-            self.model.load_state_dict(torch.load(load_model[1]))
-            self.model.eval()
+
 
 
 class NGCF(nn.Module):

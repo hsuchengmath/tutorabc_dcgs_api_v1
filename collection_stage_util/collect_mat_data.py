@@ -51,6 +51,7 @@ class Collect_Material_From_DimMaterialPool:
             DimMaterialPool with (nolock)
         where 
             MaterialType = '{}'
+            and MatCat = 'regular session'
         '''
         sql = sql.format(matType)
         dat = SQL_query(query=sql,database='BI_EDW')

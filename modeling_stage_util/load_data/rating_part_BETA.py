@@ -3,7 +3,7 @@
 
 
 import pandas as pd
-from load_data.util import SQL_query, find_user_interest_tag
+from modeling_stage_util.load_data.util import SQL_query, find_user_interest_tag
 from tqdm import tqdm
 
 

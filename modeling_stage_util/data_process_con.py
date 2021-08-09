@@ -11,19 +11,19 @@ import numpy as np
 import pandas as pd
 
 
-
+ 
 class Data_Process_for_con: 
-    def __init__(self):
-        self.start_date = '2021-01-01'
-        self.train_date = '2021-04-01'
-        self.end_date = '2021-05-01'
+    def __init__(self, start_date=None, train_date=None, end_date=None):
+        self.start_date = start_date
+        self.train_date = train_date
+        self.end_date = end_date
 
     def load_data(self):
-        self.rating_data = pd.read_csv('data/rating_BETA_Jan.csv', encoding='utf-8-sig')
-        self.user_data = pd.read_csv('data/user_feature_BETA_Jan.csv', encoding='utf-8-sig')
-        self.mat_data = pd.read_csv('data/material_feature_BETA_Jan.csv', encoding='utf-8-sig')
-        self.con_data = pd.read_csv('data/consultant_feature_BETA_Jan.csv', encoding='utf-8-sig')
-        self.review_data = pd.read_csv('data/con_review_BETA_Jan.csv', encoding='utf-8-sig')
+        self.rating_data = pd.read_csv('train_data/rating_BETA_Jan.csv', encoding='utf-8-sig')
+        self.user_data = pd.read_csv('train_data/user_feature_BETA_Jan.csv', encoding='utf-8-sig')
+        self.mat_data = pd.read_csv('train_data/material_feature_BETA_Jan.csv', encoding='utf-8-sig')
+        self.con_data = pd.read_csv('train_data/consultant_feature_BETA_Jan.csv', encoding='utf-8-sig')
+        self.review_data = pd.read_csv('train_data/con_review_BETA_Jan.csv', encoding='utf-8-sig')
 
     def data_process_of_rating_data(self, rating_data):
         # filter 1~6 classroom by SchedulingID
@@ -50,7 +50,7 @@ class Data_Process_for_con:
         test_rating_data_Jr = test_rating_data[test_rating_data['PurchaseBrandID']!=1]
         return train_rating_data_AD, test_rating_data_AD, train_rating_data_Jr, test_rating_data_Jr
 
-    def data_process_of_FSE_mat_oi(self, train_rating_data, review_data, user_data):
+    def data_process_of_FSE_con_oi(self, train_rating_data, review_data, user_data):
         # oi = overlap / individual
         # build rating_review_data for FSE_mat_oi
         rating_review_data = pd.merge(train_rating_data, review_data, on=['client_sn','con_sn','session_sn'], how='left')
@@ -62,23 +62,17 @@ class Data_Process_for_con:
         return mat_individual_dat, mat_overall_dat
 
 
-    def data_process_of_add_overlap_num_feature(self, train_test_rating_data, mat_data, user_data_with_it, Adult_or_Junior):
-        rating_data_with_UF = pd.merge(train_test_rating_data, user_data_with_it, on=['client_sn'], how='left')
-        mat_data = mat_data[mat_data['MaterialType']==Adult_or_Junior]
-        mat_data = mat_data[['MaterialID', 'MDCGSID_ENname']]
-        rating_data_with_UF = pd.merge(rating_data_with_UF, mat_data, on=['MaterialID'], how='left')
-        rating_data_with_UF= overlap_num_func_main(rating_data_with_UF)
-        return rating_data_with_UF
-
-
-
-    def data_process_of_train_rating_data(self, train_test_rating_data, mat_individual_dat, mat_overall_dat, Adult_or_Junior):
-        train_test_rating_data = train_test_rating_data[['client_sn','con_sn','session_sn','PurchaseBrandID','attend_level','attend_date','label']]
-        mat_individual_dat, mat_overall_dat = self.data_process_of_FSE_con_oi(train_test_rating_data, self.review_data, self.user_data)
-        rating_data_with_UF = self.data_process_of_add_overlap_num_feature(train_test_rating_data, self.mat_data, self.user_data_with_it, Adult_or_Junior)
+    def data_process_of_train_rating_data(self, train_test_rating_data, mat_individual_dat, mat_overall_dat, Adult_or_Junior, train_or_test='train'):
+        if train_or_test == 'train':
+            train_test_rating_data = train_test_rating_data[['client_sn','con_sn','session_sn','PurchaseBrandID','attend_level','attend_date','label']]
+            mat_individual_dat, mat_overall_dat = self.data_process_of_FSE_con_oi(train_test_rating_data, self.review_data, self.user_data)
+        elif train_or_test == 'test':
+            train_test_rating_data = train_test_rating_data[['client_sn','con_sn','attend_level']]
+        rating_data_with_UF = pd.merge(train_test_rating_data, self.user_data, on=['client_sn'], how='left')
         rating_matF_data = pd.merge(rating_data_with_UF, mat_individual_dat, on=['con_sn','Client_Sex','birthday','education','JobClassName','IndustryClassName'], how='left')
-        train_test_data = rating_matF_data[list(set(rating_matF_data.columns)-{'session_sn','PurchaseBrandID','Client_Sex','birthday','education','JobClassName','IndustryClassName','attend_date'})]
-        return train_test_data, mat_individual_dat, mat_overall_dat
+        train_data = rating_matF_data[list(set(rating_matF_data.columns)-{'session_sn','PurchaseBrandID','Client_Sex','birthday','education','JobClassName','IndustryClassName','attend_date'})]
+        return train_data, mat_individual_dat, mat_overall_dat
+
 
 
 
@@ -97,19 +91,26 @@ class Data_Process_for_con:
         self.user_data, self.user_data_with_it = data_process_of_user_data(self.user_data)
 
         self.train_data_AD, self.con_individual_dat_AD, self.con_overall_dat_AD = \
-            self.data_process_of_train_rating_data(train_rating_data=train_rating_data_AD, 
+            self.data_process_of_train_rating_data(train_test_rating_data=train_rating_data_AD, 
                                                         mat_individual_dat=None,
                                                         mat_overall_dat=None,
-                                                        Adult_or_Junior='Adult')
+                                                        Adult_or_Junior='Adult',
+                                                        train_or_test='train')
 
         self.train_data_Jr, self.con_individual_dat_Jr, self.con_overall_dat_Jr = \
-            self.data_process_of_train_rating_data(train_rating_data=train_rating_data_Jr, 
+            self.data_process_of_train_rating_data(train_test_rating_data=train_rating_data_Jr, 
                                                         mat_individual_dat=None,
                                                         mat_overall_dat=None,
-                                                        Adult_or_Junior='Junior')
+                                                        Adult_or_Junior='Junior',
+                                                        train_or_test='train')
 
         self.feature_list = list(set(self.train_data_AD.columns)-{'label'})
-        self.label_AD = np.array(self.train_data_AD['label'])
-        self.train_data_AD_wo_na = self.train_data_AD[self.feature_list]
-        self.label_Jr = np.array(self.train_data_Jr['label'])
-        self.train_data_Jr_wo_na = self.train_data_Jr[self.feature_list]
+        self.label_AD = np.array(self.train_data_AD.dropna()['label'])
+        self.train_data_AD_wo_na = self.train_data_AD.dropna()[self.feature_list]
+        self.label_Jr = np.array(self.train_data_Jr.dropna()['label'])
+        self.train_data_Jr_wo_na = self.train_data_Jr.dropna()[self.feature_list]
+        # general format
+        self.pred_obj_individual_dat_Jr = self.con_individual_dat_Jr
+        self.pred_obj_overall_dat_Jr = self.con_overall_dat_Jr
+        self.pred_obj_individual_dat_AD = self.con_individual_dat_AD
+        self.pred_obj_overall_dat_AD = self.con_overall_dat_AD
